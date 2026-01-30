@@ -1,3 +1,6 @@
+library(dplyr)
+
+
 # ==============================================================================
 # RÉFÉRENTIEL ENTREPRISES SIMPLIFIÉ
 # ==============================================================================
@@ -211,7 +214,7 @@ rownames(referentiel) <- NULL
 write.csv(referentiel, "referentiel_entreprises_simple.csv", 
           row.names = FALSE, fileEncoding = "UTF-8")
 
-cat("\nFichier sauvegardé: 'referentiel_entreprises_simple.csv'\n")
+cat("\nFichier sauvegardé: 'C:\\Users\\NICK-TECH\\Desktop\\ENSAI 2A\\Projet_BDF\\Statisticien---Economiste-pour-la-Banque-de-France-\\Data\\referentiel_entreprises_simple.csv'\n")
 
 # ==============================================================================
 # DATASET A : FLUX COMMERCIAUX (SERVICE DDG)
@@ -224,11 +227,11 @@ periodes_str <- format(periodes, "%Y-%m")
 
 # Codes pays ISO-2 et devises
 pays_codes <- c("US", "DE", "GB", "IT", "ES", "CN", "JP", "IN", "CA", "AU", 
-        "BR", "MX", "SG", "HK", "CH", "SE", "NL", "BE", "PL", "ZA")
+                "BR", "MX", "SG", "HK", "CH", "SE", "NL", "BE", "PL", "ZA")
 devises <- c("EUR", "USD", "GBP")
 nature_services <- c("R&D", "Services informatiques", "Fret", "Consulting", 
-           "Logistique", "Leasing", "Publicité", "Maintenance", 
-           "Support technique", "Courtage")
+                     "Logistique", "Leasing", "Publicité", "Maintenance", 
+                     "Support technique", "Courtage")
 
 # Générer les transactions
 flux_commerciaux <- data.frame(
@@ -248,7 +251,7 @@ flux_commerciaux$montant_eur <- abs(flux_commerciaux$montant_eur)
 
 # Sauvegarde en CSV
 write.csv(flux_commerciaux, "flux_commerciaux_ddg.csv", 
-      row.names = FALSE, fileEncoding = "UTF-8")
+          row.names = FALSE, fileEncoding = "UTF-8")
 
 cat("Fichier sauvegardé: 'flux_commerciaux_ddg.csv'\n")
 cat(paste("Nombre de transactions:", nrow(flux_commerciaux), "\n"))
@@ -263,8 +266,8 @@ cat(paste("Nombre de transactions:", nrow(flux_commerciaux), "\n"))
 n_investissements <- 2000
 annees <- 2023:2025
 pays_partenaires <- c("US", "DE", "GB", "IT", "ES", "CN", "JP", "IN", "CA", "AU", 
-            "BR", "MX", "SG", "HK", "CH", "SE", "NL", "BE", "PL", "ZA")
-types_relations <- c("Maison Mère", "Filiale", "Succursale")
+                      "BR", "MX", "SG", "HK", "CH", "SE", "NL", "BE", "PL", "ZA")
+types_relations <- c("Maison Mère", "Filiale", "Succursale", "Partenaire stratégique", "Joint Venture", "Autre")
 
 # Générer les investissements
 investissements_iete <- data.frame(
@@ -288,7 +291,111 @@ investissements_iete$stock_ide <- abs(investissements_iete$stock_ide)
 
 # Sauvegarde en CSV
 write.csv(investissements_iete, "investissements_iete.csv", 
-      row.names = FALSE, fileEncoding = "UTF-8")
+          row.names = FALSE, fileEncoding = "UTF-8")
 
-cat("Fichier sauvegardé: 'investissements_iete.csv'\n")
+cat("\nFichier sauvegardé: 'investissements_iete.csv'\n")
 cat(paste("Nombre d'investissements:", nrow(investissements_iete), "\n"))
+# ==============================================================================
+# INTRODUCTION DE "DIRTY DATA" POUR RÉALISME
+# ==============================================================================
+
+# 1. INTRODUIRE DES ERREURS DANS LE RÉFÉRENTIEL
+# ------------------------------------------------------------------------------
+set.seed(123)
+n_erreurs_siren <- 5
+indices_erreurs_siren <- sample(1:nrow(referentiel), n_erreurs_siren)
+
+# Quelques SIREN avec format incorrect (8 chiffres au lieu de 9)
+for (i in indices_erreurs_siren[1:2]) {
+  referentiel$siren[i] <- substr(referentiel$siren[i], 1, 8)
+}
+
+# Quelques valeurs manquantes dans région_siege
+referentiel$region_siege[sample(1:nrow(referentiel), 3)] <- NA
+
+# Quelques entreprises avec CA négatif (erreur de saisie)
+referentiel$ca_total[sample(1:nrow(referentiel), 2)] <- abs(referentiel$ca_total[sample(1:nrow(referentiel), 2)]) * -1
+
+# Resauvegarder le référentiel avec erreurs
+write.csv(referentiel, "referentiel_entreprises_simple.csv", 
+          row.names = FALSE, fileEncoding = "UTF-8")
+
+cat("\nFichier sauvegardé avec 'dirty data': 'referentiel_entreprises_simple.csv'\n")
+
+# 2. ASSURER CHEVAUCHEMENT SIREN ENTRE DATASETS A ET B
+# ------------------------------------------------------------------------------
+# Sélectionner ~70% des SIREN du Dataset B parmi ceux du Dataset A
+siren_communes <- sample(referentiel$siren, round(n_investissements * 0.7), replace = TRUE)
+siren_nouvelles <- sample(referentiel$siren, round(n_investissements * 0.3), replace = TRUE)
+
+investissements_iete$siren[1:length(siren_communes)] <- siren_communes
+
+# 3. INTRODUIRE DES ERREURS DANS FLUX_COMMERCIAUX
+# ------------------------------------------------------------------------------
+# Code pays invalide ("UK" au lieu de "GB")
+flux_commerciaux$pays_contrepartie[sample(1:nrow(flux_commerciaux), 50)] <- "UK"
+
+# Quelques SIREN invalides (mismatch)
+flux_commerciaux$siren[sample(1:nrow(flux_commerciaux), 30)] <- 
+  paste0(sample(300:900, 30), sprintf("%08d", sample(1:99999999, 30)))
+
+# Quelques montants manquants (NA)
+flux_commerciaux$montant_eur[sample(1:nrow(flux_commerciaux), 20)] <- NA
+
+# Devises invalides
+flux_commerciaux$devise_origine[sample(1:nrow(flux_commerciaux), 15)] <- "XYZ"
+
+# 4. INTRODUIRE DES ERREURS DANS INVESTISSEMENTS_IETE
+# ------------------------------------------------------------------------------
+# Taux de détention > 100% (erreur logique)
+investissements_iete$taux_detention[sample(1:nrow(investissements_iete), 10)] <- runif(10, 1.01, 1.5)
+
+# Quelques années invalides
+investissements_iete$annee[sample(1:nrow(investissements_iete), 8)] <- 2099
+
+# Valeurs manquantes dans type_relation
+investissements_iete$type_relation[sample(1:nrow(investissements_iete), 12)] <- NA
+
+# 5. COHÉRENCE GÉOGRAPHIQUE (BONUS)
+# ------------------------------------------------------------------------------
+# Pour les plus gros exportateurs (Dataset A), créer des investissements (Dataset B)
+top_exportateurs <- flux_commerciaux %>%
+  group_by(siren, pays_contrepartie) %>%
+  summarise(total_export = sum(montant_eur, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(total_export)) %>%
+  head(100)
+
+# Ajouter des investissements cohérents pour ces exportateurs
+if (nrow(top_exportateurs) > 0) {
+  indices_invest <- which(investissements_iete$siren %in% top_exportateurs$siren[1:30])
+  for (idx in indices_invest[1:20]) {
+    # Aligner le pays partenaire avec un pays de destination d'export
+    siren_entreprise <- investissements_iete$siren[idx]
+    pays_export <- top_exportateurs$pays_contrepartie[top_exportateurs$siren == siren_entreprise]
+    if (length(pays_export) > 0) {
+      investissements_iete$pays_partenaire[idx] <- pays_export[1]
+    }
+  }
+}
+
+# 6. RESAUVEGARDER AVEC ERREURS
+# ------------------------------------------------------------------------------
+write.csv(flux_commerciaux, "flux_commerciaux_ddg.csv", 
+          row.names = FALSE, fileEncoding = "UTF-8")
+
+cat("Fichier sauvegardé avec 'dirty data': 'C:\\Users\\NICK-TECH\\Desktop\\ENSAI 2A\\Projet_BDF\\Statisticien---Economiste-pour-la-Banque-de-France-\\Data\\flux_commerciaux_ddg.csv'\n")
+cat(paste("Nombre de transactions:", nrow(flux_commerciaux), "\n"))
+
+write.csv(investissements_iete, "investissements_iete.csv", 
+          row.names = FALSE, fileEncoding = "UTF-8")
+
+cat("\nFichier sauvegardé avec 'dirty data': 'C:\\Users\\NICK-TECH\\Desktop\\ENSAI 2A\\Projet_BDF\\Statisticien---Economiste-pour-la-Banque-de-France-\\Data\\investissements_iete.csv'\n")
+cat(paste("Nombre d'investissements:", nrow(investissements_iete), "\n"))
+
+# 7. RÉSUMÉ DES ERREURS INTRODUITES
+# ------------------------------------------------------------------------------
+cat("\n=== RÉSUMÉ DES ERREURS INTRODUITES ===\n")
+cat("✗ Référentiel: SIREN invalides, NA dans région, CA négatifs\n")
+cat("✗ Flux commerciaux: Codes pays invalides, SIREN mismatches, NA, devises fausses\n")
+cat("✗ Investissements: Taux détention > 100%, années invalides, NA\n")
+cat("✓ Cohérence: ~70% des SIREN en commun, alignement géographique partiel\n")
